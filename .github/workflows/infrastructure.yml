@@ -1,0 +1,104 @@
+---
+
+name: Infrastructure Deployment
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'infrastructure/**'
+
+jobs:
+  terraform-fmt:
+    name: Check Terraform Format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      # TIP: Consider locking the TF version in a real production environment
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform fmt check
+        working-directory: infrastructure
+        run: terraform fmt -check -recursive
+
+      - name: Terraform validate Staging ENV
+        working-directory: infrastructure/environments/stg
+        run: terraform init -backend=false && terraform validate
+
+      - name: Terraform validate Production ENV
+        working-directory: infrastructure/environments/prd
+        run: terraform init -backend=false && terraform validate
+
+
+  terraform-stg:
+    name: Deploy STG Environment
+    runs-on: ubuntu-latest
+    needs: terraform-fmt
+    environment: stg
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-central-1
+
+      - name: Terraform Init
+        working-directory: infrastructure/environments/stg
+        run: terraform init -input=false
+
+      - name: Terraform Plan & Show
+        working-directory: infrastructure/environments/stg
+        run: |
+          terraform plan -out=plan -input=false \
+          && terraform show plan
+
+      - name: Terraform Apply (Auto)
+        working-directory: infrastructure/environments/stg
+        run: terraform apply -auto-approve plan
+
+  terraform-prd:
+    name: Deploy PRD Environment
+    runs-on: ubuntu-latest
+    needs: terraform-fmt
+    environment: prd
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-central-1
+
+      - name: Terraform Init
+        working-directory: infrastructure/environments/prd
+        run: terraform init -input=false
+
+      - name: Terraform Plan & Show
+        id: plan
+        working-directory: infrastructure/environments/prd
+        run: |
+          terraform plan -out=plan -input=false \
+          && terraform show plan
+
+      - name: Terraform Apply (Manual Approval)
+        if: github.ref == 'refs/heads/main'
+        working-directory: infrastructure/environments/prd
+        run: terraform apply -auto-approve plan
