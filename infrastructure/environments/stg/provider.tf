@@ -17,4 +17,12 @@ terraform {
 
 provider "aws" {
   region = "eu-central-1"
+
+  default_tags {
+    tags = {
+      ManagedBy   = "terraform"
+      Environment = local.env_name
+      Project     = local.project_name
+    }
+  }
 }
