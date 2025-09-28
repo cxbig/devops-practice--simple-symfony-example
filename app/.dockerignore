@@ -1,0 +1,10 @@
+# Composer dependencies (will be installed in build stage)
+vendor/
+
+# Symfony runtime cache & logs
+var/
+!var/cache/.gitkeep
+!var/log/.gitkeep
+
+# state files
+.env*

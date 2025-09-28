@@ -1,0 +1,63 @@
+---
+
+name: Simple Symfony Example CI Workflow
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'app/**'
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout stage ---------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      # Lint stage -------------------------------------------------------------
+      - name: Lint
+        working-directory: app
+        run: |
+          echo "It's a linter placeholder"
+          # run some lint commands
+
+      # Docker build stage -----------------------------------------------------
+      ## In case if you need multi-platform build
+      #- name: Setup QEMU
+      #  uses: docker/setup-qemu-action@v3
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # AWS ECR login ----------------------------------------------------------
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.SECRET_KEY }}
+          aws-region: eu-central-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Prepare tags
+        run: |
+          echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+          BRANCH_TAG="${GITHUB_REF_NAME//\//-}"
+          BRANCH_TAG="${BRANCH_TAG,,}"
+          echo "BRANCH_TAG=$BRANCH_TAG" >> $GITHUB_ENV
+
+      - name: Build & Push
+        uses: docker/build-push-action@v6
+        with:
+          context: app/
+          push: true
+          tags: |
+            ${{ vars.IMAGE_REGISTRY }}/${{ vars.IMAGE_NAME }}:${{ env.SHORT_SHA }}
+            ${{ vars.IMAGE_REGISTRY }}/${{ vars.IMAGE_NAME }}:${{ env.BRANCH_TAG }}
+            ${{ vars.IMAGE_REGISTRY }}/${{ vars.IMAGE_NAME }}:latest
